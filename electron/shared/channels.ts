@@ -1,0 +1,56 @@
+export const IPC = Object.freeze({
+  configGet: 'toae:config:get',
+  configPatch: 'toae:config:patch',
+  configChanged: 'toae:config:changed',
+
+  appShowSetting: 'toae:app:show-setting',
+  appShowTranslator: 'toae:app:show-translator',
+  appActiveWindowIsSelf: 'toae:app:active-window-is-self',
+  appDetectLanguage: 'toae:app:detect-language',
+
+  windowHide: 'toae:window:hide',
+  windowClose: 'toae:window:close',
+  windowShow: 'toae:window:show',
+  windowFocus: 'toae:window:focus',
+  windowIsFocused: 'toae:window:is-focused',
+  windowIsVisible: 'toae:window:is-visible',
+  windowGetPosition: 'toae:window:get-position',
+  windowSetPosition: 'toae:window:set-position',
+  windowGetSize: 'toae:window:get-size',
+  windowSetSize: 'toae:window:set-size',
+  windowAlwaysOnTop: 'toae:window:always-on-top',
+  windowSetTitle: 'toae:window:set-title',
+  windowSetFullscreen: 'toae:window:set-fullscreen',
+  windowTranslatorHeight: 'toae:window:translator-height',
+
+  clipboardReadText: 'toae:clipboard:read-text',
+  clipboardWriteText: 'toae:clipboard:write-text',
+  dialogMessage: 'toae:dialog:message',
+  dialogConfirm: 'toae:dialog:confirm',
+  menuShow: 'toae:menu:show',
+  externalOpen: 'toae:external:open',
+  shortcutIsRegistered: 'toae:shortcut:is-registered',
+  startupGet: 'toae:startup:get',
+  startupSet: 'toae:startup:set',
+
+  providerCall: 'toae:provider:call',
+  providerCancel: 'toae:provider:cancel',
+  providerTestDraft: 'toae:provider:test-draft',
+  providerAudio: 'toae:provider:audio',
+
+  captureFrame: 'toae:capture:frame',
+  captureError: 'toae:capture:error',
+  captureConfirm: 'toae:capture:confirm',
+  captureCancel: 'toae:capture:cancel',
+
+  ahkReadScript: 'toae:ahk:read-script',
+  ahkSaveReload: 'toae:ahk:save-reload',
+  ahkStart: 'toae:ahk:start',
+  ahkStop: 'toae:ahk:stop',
+  ahkStatus: 'toae:ahk:status',
+  ahkLog: 'toae:ahk:log',
+
+  translatorPayload: 'toae:translator:payload',
+  translatorFocus: 'toae:translator:focus',
+  rendererLog: 'toae:log'
+} as const)

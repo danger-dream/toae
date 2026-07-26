@@ -1,0 +1,7 @@
+import { rm } from 'node:fs/promises'
+
+await Promise.all([
+  rm('dist', { recursive: true, force: true }),
+  rm('dist-electron', { recursive: true, force: true }),
+  rm('release', { recursive: true, force: true })
+])
