@@ -234,6 +234,7 @@ export interface ToaeBridge {
     onLog(handler: (line: string) => void): () => void
   }
   translator?: {
+    ready(): Promise<void>
     onPayload(handler: (payload: TranslatorPayload) => void): () => void
     onFocus(handler: (clear: boolean) => void): () => void
   }

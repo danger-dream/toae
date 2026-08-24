@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {listen, once, writeClipboardText, showMenu} from '../Background'
-import { ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import InputArea from './InputArea.vue'
 import IconBtn from '../components/IconBtn.vue'
 import { configuration } from '../Configuration.ts'
@@ -10,14 +10,25 @@ import { LanguageList, LanguageZh } from '../Plugins/Translator'
 const reverse = ref<string>('')
 const src = ref<InstanceType<typeof InputArea>>(null)
 
+async function focusSourceInput(): Promise<void> {
+	await nextTick()
+	await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+	if (src.value?.focus()) return
+	window.setTimeout(() => { src.value?.focus() }, 50)
+}
+
 listen('translator://focus', async function() {
 	if (configuration.auto_clear) {
 		await store.clear()
 	}
-	src.value?.focus()
+	await focusSourceInput()
 })
 
-listen('translator://focus/no-clear', () => src.value?.focus())
+listen('translator://focus/no-clear', () => { void focusSourceInput() })
+
+onMounted(() => {
+	void window.toae.translator?.ready()
+})
 
 function onSelectLang(e: MouseEvent, target: 'src' | 'target') {
 	e.preventDefault()

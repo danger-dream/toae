@@ -20,6 +20,8 @@ export class WindowManager {
   private quitting = false
   private onCaptureWindowHidden: (() => void) | undefined
   private nativeMenu: { owner: BrowserWindow; token: symbol } | undefined
+  private readonly translatorReadyContents = new Set<number>()
+  private readonly translatorReadyWaiters = new Map<number, Set<() => void>>()
 
   constructor(
     private readonly preloadPath: string,
@@ -35,6 +37,16 @@ export class WindowManager {
   get(label: WindowLabel): BrowserWindow | undefined {
     const window = this.windows.get(label)
     return window && !window.isDestroyed() ? window : undefined
+  }
+
+  markTranslatorReady(webContentsId: number): void {
+    const window = this.get('translator')
+    if (!window || window.webContents.id !== webContentsId) throw new Error('translator renderer is unavailable')
+    this.translatorReadyContents.add(webContentsId)
+    const waiters = this.translatorReadyWaiters.get(webContentsId)
+    if (!waiters) return
+    this.translatorReadyWaiters.delete(webContentsId)
+    for (const resolveWaiter of waiters) resolveWaiter()
   }
 
   labelForWebContentsId(id: number): WindowLabel | undefined {
@@ -79,10 +91,16 @@ export class WindowManager {
       title: 'TOAE'
     })
     window.setContentSize(TRANSLATOR_WIDTH, TRANSLATOR_MIN_HEIGHT, false)
+    const webContentsId = window.webContents.id
+    window.webContents.on('did-start-loading', () => { this.translatorReadyContents.delete(webContentsId) })
     window.on('close', event => {
       if (this.quitting) return
       event.preventDefault()
       window.hide()
+    })
+    window.on('closed', () => {
+      this.translatorReadyContents.delete(webContentsId)
+      this.translatorReadyWaiters.delete(webContentsId)
     })
     return window
   }
@@ -152,11 +170,11 @@ export class WindowManager {
   async showTranslator(focus: boolean, config: Readonly<AppConfigurationData>): Promise<void> {
     const window = this.createTranslator(config)
     await this.waitUntilLoaded(window)
+    await this.waitUntilTranslatorReady(window)
     this.positionTranslator(window, config.win_position)
     window.setAlwaysOnTop(true)
     if (focus) {
-      window.show()
-      window.focus()
+      await this.focusTranslatorWindow(window)
       this.send(window, IPC.translatorFocus, true)
     } else {
       window.showInactive()
@@ -195,6 +213,7 @@ export class WindowManager {
   async sendTranslatorPayload(payload: TranslatorPayload, config: Readonly<AppConfigurationData>): Promise<void> {
     const window = this.createTranslator(config)
     await this.waitUntilLoaded(window)
+    await this.waitUntilTranslatorReady(window)
     this.send(window, IPC.translatorPayload, payload)
   }
 
@@ -312,6 +331,59 @@ export class WindowManager {
       bounds.y = cursor.y
     }
     window.setBounds(clampBounds(bounds, display.workArea), false)
+  }
+
+  private async waitUntilTranslatorReady(window: BrowserWindow): Promise<void> {
+    const webContentsId = window.webContents.id
+    if (this.translatorReadyContents.has(webContentsId)) return
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+      const waiters = this.translatorReadyWaiters.get(webContentsId) ?? new Set<() => void>()
+      const timer = setTimeout(() => {
+        waiters.delete(done)
+        if (waiters.size === 0) this.translatorReadyWaiters.delete(webContentsId)
+        rejectPromise(new Error('translator renderer ready timed out'))
+      }, 15_000)
+      const done = () => {
+        clearTimeout(timer)
+        resolvePromise()
+      }
+      waiters.add(done)
+      this.translatorReadyWaiters.set(webContentsId, waiters)
+    })
+  }
+
+  private async focusTranslatorWindow(window: BrowserWindow): Promise<void> {
+    if (window.isMinimized()) window.restore()
+    let focused = window.isFocused()
+    for (let attempt = 0; !focused && attempt < 2; attempt += 1) {
+      const focusResult = this.waitForWindowFocus(window, 120)
+      window.show()
+      window.focus()
+      focused = await focusResult
+      if (!focused && attempt === 0 && !window.isDestroyed()) {
+        window.moveTop()
+        await new Promise(resolvePromise => setTimeout(resolvePromise, 16))
+      }
+    }
+    if (!window.webContents.isDestroyed()) window.webContents.focus()
+    if (!focused) this.logger.log('warn', 'translator window focus was not confirmed after retry')
+  }
+
+  private async waitForWindowFocus(window: BrowserWindow, timeoutMs: number): Promise<boolean> {
+    if (window.isFocused()) return true
+    return new Promise<boolean>(resolvePromise => {
+      let settled = false
+      const done = (focused: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        window.removeListener('focus', onFocus)
+        resolvePromise(focused)
+      }
+      const onFocus = () => done(true)
+      const timer = setTimeout(() => done(!window.isDestroyed() && window.isFocused()), timeoutMs)
+      window.once('focus', onFocus)
+    })
   }
 
   private async waitUntilLoaded(window: BrowserWindow): Promise<void> {

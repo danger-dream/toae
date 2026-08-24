@@ -127,6 +127,7 @@ if (label === 'setting') {
 
 if (label === 'translator') {
   bridge.translator = {
+    ready: () => invoke(IPC.translatorReady),
     onPayload: handler => subscribe(IPC.translatorPayload, handler),
     onFocus: handler => subscribe(IPC.translatorFocus, handler)
   }

@@ -86,6 +86,7 @@ export function registerIpcHandlers(input: {
 
   handle(IPC.appShowSetting, ['translator'], () => input.windows.showSetting())
   handle(IPC.appShowTranslator, ['translator'], (_event, _label, value) => input.windows.showTranslator(Boolean(object(value).focus), input.config.value()))
+  handle(IPC.translatorReady, ['translator'], event => { input.windows.markTranslatorReady(event.sender.id) })
   handle(IPC.appActiveWindowIsSelf, ['translator'], () => input.windows.activeWindowIsSelf())
   handle(IPC.appDetectLanguage, ['translator'], (_event, _label, value) => {
     const text = boundedString(object(value).text, 100_000, 'text')

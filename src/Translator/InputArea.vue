@@ -72,9 +72,14 @@ function onEnter(e: KeyboardEvent) {
 	}
 }
 
-defineExpose({
-	focus: () => input.value?.focus()
-})
+function focus(): boolean {
+	const element = input.value as HTMLTextAreaElement | null
+	if (!element) return false
+	element.focus({ preventScroll: true })
+	return document.activeElement === element
+}
+
+defineExpose({ focus })
 </script>
 
 <template>

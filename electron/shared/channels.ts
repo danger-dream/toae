@@ -52,5 +52,6 @@ export const IPC = Object.freeze({
 
   translatorPayload: 'toae:translator:payload',
   translatorFocus: 'toae:translator:focus',
+  translatorReady: 'toae:translator:ready',
   rendererLog: 'toae:log'
 } as const)

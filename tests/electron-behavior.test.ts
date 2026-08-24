@@ -90,6 +90,50 @@ describe('show_translator action behavior', () => {
     } as any, true, {} as any)
     expect(showTranslator).toHaveBeenCalledOnce()
   })
+
+  it('holds the first show until the translator renderer reports that its input exists', async () => {
+    const manager = new WindowManager('', '', '', { log: vi.fn() } as any)
+    const window = { isDestroyed: () => false, webContents: { id: 17 } }
+    ;(manager as any).windows.set('translator', window)
+
+    let released = false
+    const waiting = (manager as any).waitUntilTranslatorReady(window).then(() => { released = true })
+    await Promise.resolve()
+    expect(released).toBe(false)
+
+    manager.markTranslatorReady(17)
+    await waiting
+    expect(released).toBe(true)
+  })
+
+  it('confirms native window focus before focusing the web page', async () => {
+    const manager = new WindowManager('', '', '', { log: vi.fn() } as any)
+    const focusListeners = new Set<() => void>()
+    const order: string[] = []
+    let focused = false
+    const window = {
+      isMinimized: () => false,
+      restore: vi.fn(),
+      isFocused: () => focused,
+      isDestroyed: () => false,
+      show: () => { order.push('window.show') },
+      focus: () => {
+        order.push('window.focus')
+        focused = true
+        for (const listener of [...focusListeners]) listener()
+      },
+      moveTop: () => { order.push('window.moveTop') },
+      once: (event: string, listener: () => void) => { if (event === 'focus') focusListeners.add(listener) },
+      removeListener: (event: string, listener: () => void) => { if (event === 'focus') focusListeners.delete(listener) },
+      webContents: {
+        isDestroyed: () => false,
+        focus: () => { order.push('webContents.focus') }
+      }
+    }
+
+    await (manager as any).focusTranslatorWindow(window)
+    expect(order).toEqual(['window.show', 'window.focus', 'webContents.focus'])
+  })
 })
 
 describe('native menu ownership and coordinates', () => {
