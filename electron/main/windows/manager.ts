@@ -169,14 +169,22 @@ export class WindowManager {
 
   async showTranslator(focus: boolean, config: Readonly<AppConfigurationData>): Promise<void> {
     const window = this.createTranslator(config)
-    await this.waitUntilLoaded(window)
-    await this.waitUntilTranslatorReady(window)
     this.positionTranslator(window, config.win_position)
     window.setAlwaysOnTop(true)
     if (focus) {
+      // Foreground permission transferred by the AHK helper is short-lived. Use it
+      // before waiting for the renderer, then focus the page only if the native
+      // window is still the foreground window once its input is ready.
       await this.focusTranslatorWindow(window)
-      this.send(window, IPC.translatorFocus, true)
+      await this.waitUntilLoaded(window)
+      await this.waitUntilTranslatorReady(window)
+      if (window.isFocused() && !window.webContents.isDestroyed()) {
+        window.webContents.focus()
+        this.send(window, IPC.translatorFocus, true)
+      }
     } else {
+      await this.waitUntilLoaded(window)
+      await this.waitUntilTranslatorReady(window)
       window.showInactive()
     }
   }
@@ -365,7 +373,6 @@ export class WindowManager {
         await new Promise(resolvePromise => setTimeout(resolvePromise, 16))
       }
     }
-    if (!window.webContents.isDestroyed()) window.webContents.focus()
     if (!focused) this.logger.log('warn', 'translator window focus was not confirmed after retry')
   }
 

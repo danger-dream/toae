@@ -26,23 +26,42 @@ describe('translator visibility regression', () => {
 })
 
 describe('translator input focus regression', () => {
-  it('waits for renderer readiness and real window activation before focusing the textarea', () => {
+  it('transfers AHK foreground permission, uses it before renderer waits, then focuses the input', () => {
     const channels = source('electron/shared/channels.ts')
     const preload = source('electron/preload/index.ts')
     const ipc = source('electron/main/ipc/register.ts')
     const manager = source('electron/main/windows/manager.ts')
+    const helperClient = source('electron/main/helper/client.ts')
+    const helperMain = source('native-helper/src/main.rs')
+    const supervisor = source('native-helper/src/supervisor.rs')
+    const ahk = source('native-helper/src/ahk.rs')
     const sourceView = source('src/Translator/SourceView.vue')
     const inputArea = source('src/Translator/InputArea.vue')
 
+    expect(helperClient).toContain("'--foreground-pid', String(process.pid)")
+    expect(helperMain).toContain('foreground_pid: args.required_u32("--foreground-pid")?')
+    expect(supervisor).toMatch(/\.arg\("--foreground-pid"\)[\s\S]*?\.arg\(self\.foreground_pid\.to_string\(\)\)/)
+    expect(ahk).toMatch(/if action == "show_translator"[\s\S]*?AllowSetForegroundWindow\(foreground_pid\)[\s\S]*?event_writer\.json/)
     expect(channels).toContain("translatorReady: 'toae:translator:ready'")
     expect(preload).toContain('ready: () => invoke(IPC.translatorReady)')
     expect(ipc).toContain('input.windows.markTranslatorReady(event.sender.id)')
     expect(manager).toContain('await this.waitUntilTranslatorReady(window)')
     expect(manager).toContain('await this.focusTranslatorWindow(window)')
+    expect(manager).toMatch(/async showTranslator[\s\S]*?if \(focus\)[\s\S]*?await this\.focusTranslatorWindow\(window\)[\s\S]*?await this\.waitUntilLoaded\(window\)[\s\S]*?await this\.waitUntilTranslatorReady\(window\)/)
     expect(manager.indexOf('await this.focusTranslatorWindow(window)')).toBeLessThan(manager.indexOf('this.send(window, IPC.translatorFocus, true)'))
+    expect(manager).toContain('if (window.isFocused() && !window.webContents.isDestroyed())')
     expect(sourceView).toContain('window.toae.translator?.ready()')
     expect(sourceView).toContain('requestAnimationFrame')
     expect(inputArea).toContain('document.activeElement === element')
+  })
+})
+
+describe('selection translation no-result regression', () => {
+  it('never turns background selection failures into blocking dialogs', () => {
+    const router = source('electron/main/actions/router.ts')
+    expect(router).not.toContain('showMessageBox')
+    expect(router).toContain("this.logger.log(level, 'selection translation skipped'")
+    expect(router).toContain('did not place selected Unicode text on the clipboard')
   })
 })
 
@@ -136,7 +155,7 @@ describe('native capture diagnostics regression', () => {
 describe('packaging allowlist regression', () => {
   it('packages only renderer, two runtime bundles and metadata, with node_modules excluded', () => {
     const packageJson = JSON.parse(source('package.json'))
-    expect(packageJson.version).toBe('0.1.2')
+    expect(packageJson.version).toBe('0.1.3')
     expect(packageJson.build.files).toEqual([
       'dist/renderer/**/*',
       'dist-electron/main/index.cjs',
@@ -146,6 +165,6 @@ describe('packaging allowlist regression', () => {
       '!node_modules/**/*'
     ])
     expect(packageJson.build).not.toHaveProperty('asarUnpack')
-    expect(JSON.parse(source('package-lock.json')).version).toBe('0.1.2')
+    expect(JSON.parse(source('package-lock.json')).version).toBe('0.1.3')
   })
 })

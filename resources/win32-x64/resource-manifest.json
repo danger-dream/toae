@@ -1,7 +1,7 @@
 {
   "protocol": 1,
   "arch": "x86_64",
-  "helperSha256": "8ff326498459bc415100c4f6ff2c36d03022a3af5ef9a180afacd19c83c3ef12",
+  "helperSha256": "0ff762fe47472abb539981516e99d0f9cead4fa6f1ae28bc63d5383920fe8b1c",
   "dllSha256": "b49cf679662d1853b85bcee52607e5e89052bac3661461e35867e95713f8b282",
   "defaultScriptSha256": "6ab1fbaeb7e9b878c8597826a0e0e214d9b344a9204ad30aa5e4dfd69c1c65ee"
 }

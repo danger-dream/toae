@@ -40,6 +40,7 @@ vi.mock('electron', () => {
   }
 })
 
+import { dialog } from 'electron'
 import { ActionRouter } from '../electron/main/actions/router'
 import { registerIpcHandlers } from '../electron/main/ipc/register'
 import { WindowManager } from '../electron/main/windows/manager'
@@ -106,33 +107,89 @@ describe('show_translator action behavior', () => {
     expect(released).toBe(true)
   })
 
-  it('confirms native window focus before focusing the web page', async () => {
-    const manager = new WindowManager('', '', '', { log: vi.fn() } as any)
-    const focusListeners = new Set<() => void>()
+  it('uses native foreground permission before waiting for the renderer, then focuses the input', async () => {
     const order: string[] = []
     let focused = false
     const window = {
-      isMinimized: () => false,
-      restore: vi.fn(),
+      setAlwaysOnTop: () => { order.push('alwaysOnTop') },
       isFocused: () => focused,
-      isDestroyed: () => false,
-      show: () => { order.push('window.show') },
-      focus: () => {
-        order.push('window.focus')
-        focused = true
-        for (const listener of [...focusListeners]) listener()
-      },
-      moveTop: () => { order.push('window.moveTop') },
-      once: (event: string, listener: () => void) => { if (event === 'focus') focusListeners.add(listener) },
-      removeListener: (event: string, listener: () => void) => { if (event === 'focus') focusListeners.delete(listener) },
       webContents: {
         isDestroyed: () => false,
         focus: () => { order.push('webContents.focus') }
       }
     }
+    const manager = {
+      createTranslator: () => window,
+      positionTranslator: () => { order.push('position') },
+      focusTranslatorWindow: async () => {
+        order.push('native.focus')
+        focused = true
+      },
+      waitUntilLoaded: async () => { order.push('renderer.loaded') },
+      waitUntilTranslatorReady: async () => { order.push('renderer.ready') },
+      send: () => { order.push('textarea.focus') }
+    }
 
-    await (manager as any).focusTranslatorWindow(window)
-    expect(order).toEqual(['window.show', 'window.focus', 'webContents.focus'])
+    await WindowManager.prototype.showTranslator.call(manager as any, true, { win_position: 'center' } as any)
+
+    expect(order).toEqual([
+      'position',
+      'alwaysOnTop',
+      'native.focus',
+      'renderer.loaded',
+      'renderer.ready',
+      'webContents.focus',
+      'textarea.focus'
+    ])
+  })
+
+  it('keeps background translator displays inactive', async () => {
+    const order: string[] = []
+    const focusTranslatorWindow = vi.fn()
+    const window = {
+      setAlwaysOnTop: vi.fn(),
+      showInactive: () => { order.push('showInactive') },
+      webContents: { isDestroyed: () => false }
+    }
+    const manager = {
+      createTranslator: () => window,
+      positionTranslator: vi.fn(),
+      focusTranslatorWindow,
+      waitUntilLoaded: async () => { order.push('renderer.loaded') },
+      waitUntilTranslatorReady: async () => { order.push('renderer.ready') },
+      send: vi.fn()
+    }
+
+    await WindowManager.prototype.showTranslator.call(manager as any, false, { win_position: 'center' } as any)
+
+    expect(order).toEqual(['renderer.loaded', 'renderer.ready', 'showInactive'])
+    expect(focusTranslatorWindow).not.toHaveBeenCalled()
+    expect(manager.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('selection translation failure behavior', () => {
+  it.each([
+    ['target application did not place selected Unicode text on the clipboard', 'debug'],
+    ['native helper failed unexpectedly', 'warn']
+  ])('silently skips %s without opening a modal', async (message, level) => {
+    const logger = { log: vi.fn() }
+    const selectionGet = vi.fn(async () => { throw new Error(message) })
+    const router = new ActionRouter(
+      {} as any,
+      { start: vi.fn() } as any,
+      { client: { supported: () => true, handshake: () => ({}), selectionGet } } as any,
+      { value: () => ({}) } as any,
+      logger as any
+    )
+
+    await router.dispatch('selection_translate', 'ahk')
+
+    expect(dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(logger.log).toHaveBeenCalledWith(level, 'selection translation skipped', {
+      source: 'ahk',
+      reason: message
+    })
   })
 })
 

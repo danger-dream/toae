@@ -1,4 +1,3 @@
-import { dialog } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { ACTIONS, type ActionName, type TranslatorPayload } from '../../../src/contracts'
 import type { CaptureService } from '../capture/service'
@@ -49,10 +48,12 @@ export class ActionRouter {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this.logger.log('error', 'action failed', { action, source, error: message })
       if (action === 'selection_translate') {
-        await dialog.showMessageBox({ type: 'error', title: '错误', message: `取词失败: ${message}` })
+        const level = isExpectedSelectionMiss(message) ? 'debug' : 'warn'
+        this.logger.log(level, 'selection translation skipped', { source, reason: message })
+        return
       }
+      this.logger.log('error', 'action failed', { action, source, error: message })
     }
   }
 
@@ -80,4 +81,20 @@ export class ActionRouter {
     await this.windows.sendTranslatorPayload(payload, this.config.value())
     await this.windows.showTranslator(false, this.config.value())
   }
+}
+
+const EXPECTED_SELECTION_MISSES = [
+  'did not place selected Unicode text on the clipboard',
+  'does not expose a non-empty text selection',
+  'did not expose selected text',
+  'selected text belongs to a protected password field',
+  'Ctrl+C input was blocked',
+  'clipboard is busy',
+  'selection request cancelled',
+  'selection.get',
+  'timed out'
+]
+
+function isExpectedSelectionMiss(message: string): boolean {
+  return EXPECTED_SELECTION_MISSES.some(fragment => message.includes(fragment))
 }

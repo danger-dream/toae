@@ -81,7 +81,8 @@ export class HelperClient extends EventEmitter {
       '--protocol', String(PROTOCOL_VERSION),
       '--session-token', token,
       '--script', scriptPath,
-      '--dll-sha256', EXPECTED_DLL_SHA256
+      '--dll-sha256', EXPECTED_DLL_SHA256,
+      '--foreground-pid', String(process.pid)
     ], {
       cwd: dirname(helperPath),
       windowsHide: true,

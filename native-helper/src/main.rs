@@ -39,6 +39,7 @@ fn run() -> Result<()> {
                 session_token: args.required_string("--session-token")?,
                 script_path: args.required_path("--script")?,
                 expected_dll_sha256: args.required_string("--dll-sha256")?,
+                foreground_pid: args.required_u32("--foreground-pid")?,
             });
         }
         if args.flag("--hook") {
@@ -46,6 +47,7 @@ fn run() -> Result<()> {
                 session_token: args.required_string("--session-token")?,
                 script_path: args.required_path("--script")?,
                 expected_dll_sha256: args.required_string("--dll-sha256")?,
+                foreground_pid: args.required_u32("--foreground-pid")?,
             });
         }
         if args.flag("--uia-worker") {
@@ -90,6 +92,18 @@ impl Arguments {
     }
 
     #[cfg(windows)]
+    fn required_u32(&self, key: &str) -> Result<u32> {
+        let value = self
+            .required_string(key)?
+            .parse::<u32>()
+            .with_context(|| format!("invalid argument {key}"))?;
+        if value == 0 {
+            bail!("argument {key} must be non-zero");
+        }
+        Ok(value)
+    }
+
+    #[cfg(windows)]
     fn required_path(&self, key: &str) -> Result<PathBuf> {
         let path = PathBuf::from(self.required_string(key)?);
         if !path.is_absolute() {
@@ -110,7 +124,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Arguments> {
         }
         let takes_value = matches!(
             key.as_str(),
-            "--protocol" | "--session-token" | "--script" | "--dll-sha256"
+            "--protocol" | "--session-token" | "--script" | "--dll-sha256" | "--foreground-pid"
         );
         if takes_value {
             let value = values.get(index + 1).context("missing argument value")?;
@@ -139,13 +153,22 @@ mod tests {
     #[test]
     fn parses_fixed_modes_and_values() {
         let args = parse_args(
-            ["--supervisor", "--protocol", "1", "--session-token", "abc"]
-                .into_iter()
-                .map(str::to_owned),
+            [
+                "--supervisor",
+                "--protocol",
+                "1",
+                "--session-token",
+                "abc",
+                "--foreground-pid",
+                "42",
+            ]
+            .into_iter()
+            .map(str::to_owned),
         )
         .unwrap();
         assert!(args.flag("--supervisor"));
         assert_eq!(args.flags["--protocol"].as_deref(), Some("1"));
+        assert_eq!(args.flags["--foreground-pid"].as_deref(), Some("42"));
     }
 
     #[test]

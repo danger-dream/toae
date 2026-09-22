@@ -15,6 +15,7 @@ use windows::Win32::System::LibraryLoader::{
     GetProcAddress, LoadLibraryExW, SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
     LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, LOAD_LIBRARY_SEARCH_SYSTEM32,
 };
+use windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow;
 
 const DLL_NAME: &str = "AutoHotkey_H.dll";
 const MAX_ACTION_UNITS: usize = 128;
@@ -34,10 +35,14 @@ pub struct HookOptions {
     pub session_token: String,
     pub script_path: PathBuf,
     pub expected_dll_sha256: String,
+    pub foreground_pid: u32,
 }
 
 pub fn run_hook(options: HookOptions) -> Result<()> {
     validate_token(&options.session_token)?;
+    if options.foreground_pid == 0 {
+        bail!("foreground process id must be non-zero");
+    }
     if !cfg!(target_arch = "x86_64") {
         bail!("AutoHotkey worker requires x86_64");
     }
@@ -70,9 +75,16 @@ pub fn run_hook(options: HookOptions) -> Result<()> {
         .set(sender)
         .map_err(|_| anyhow::anyhow!("AutoHotkey callback queue is already initialized"))?;
     let event_writer = Arc::clone(&writer);
+    let foreground_pid = options.foreground_pid;
     thread::spawn(move || {
         while let Ok(action) = receiver.recv() {
             if ACTIONS.contains(&action.as_str()) {
+                if action == "show_translator" {
+                    // The AHK worker receives the user's hotkey, so Windows grants this
+                    // process the right to choose the next foreground process. Transfer
+                    // that one-shot right before Electron handles the action event.
+                    let _ = unsafe { AllowSetForegroundWindow(foreground_pid) };
+                }
                 let _ = event_writer.json(&json!({
                     "v": VERSION,
                     "event": "action",

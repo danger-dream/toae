@@ -34,6 +34,7 @@ pub struct SupervisorOptions {
     pub session_token: String,
     pub script_path: PathBuf,
     pub expected_dll_sha256: String,
+    pub foreground_pid: u32,
 }
 
 #[derive(Deserialize)]
@@ -87,6 +88,7 @@ pub fn run(options: SupervisorOptions) -> Result<()> {
         options.session_token.clone(),
         options.script_path.clone(),
         options.expected_dll_sha256.clone(),
+        options.foreground_pid,
         Arc::clone(&writer),
         Arc::clone(&job),
     )));
@@ -643,6 +645,7 @@ struct AhkManager {
     session_token: String,
     script_path: PathBuf,
     expected_dll_sha256: String,
+    foreground_pid: u32,
     writer: Arc<FrameWriter<std::io::Stdout>>,
     job: Arc<KillOnCloseJob>,
     worker: Option<Worker>,
@@ -657,6 +660,7 @@ impl AhkManager {
         session_token: String,
         script_path: PathBuf,
         expected_dll_sha256: String,
+        foreground_pid: u32,
         writer: Arc<FrameWriter<std::io::Stdout>>,
         job: Arc<KillOnCloseJob>,
     ) -> Self {
@@ -664,6 +668,7 @@ impl AhkManager {
             session_token,
             script_path,
             expected_dll_sha256,
+            foreground_pid,
             writer,
             job,
             worker: None,
@@ -793,6 +798,8 @@ impl AhkManager {
             .arg(&self.script_path)
             .arg("--dll-sha256")
             .arg(&self.expected_dll_sha256)
+            .arg("--foreground-pid")
+            .arg(self.foreground_pid.to_string())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -886,6 +893,9 @@ fn validate_options(options: &SupervisorOptions) -> Result<()> {
     }
     if !options.script_path.is_absolute() {
         bail!("script path must be absolute");
+    }
+    if options.foreground_pid == 0 {
+        bail!("foreground process id must be non-zero");
     }
     Ok(())
 }
